@@ -1,0 +1,93 @@
+# This is an example Starter pipeline configuration
+# Use a skeleton to build, test and deploy using manual and parallel steps
+# -----
+# You can specify a custom docker image from Docker Hub as your build environment.
+definitions: 
+  steps:
+    - step: &build-type
+        image: maven:latest
+        name: Build Application
+        script:
+          - echo "Performing Build and Test"
+          - mvn package
+        artifacts:
+          - target/**.war
+
+  stages:
+    stage: &veracode-sast-platform
+       name: Veraocde Static Analysis Security Testing
+       steps:
+         - step:
+            name: Running Platform SAST
+            image: veracode/api-wrapper-java:latest
+            script:
+               - java -jar /opt/veracode/api-wrapper.jar -vid $VERACODE_API_ID -vkey $VERACODE_API_KEY -action UploadAndScan -appname "verademo-bitbucket" -version "v0.1" -filepath target/*.war -createprofile false
+            #Note: artifact target directory must be defined in prior step to pass application content to this step
+            
+    stage: &veracode-sast-pipeline
+       name: Veracode Static Analysis Security Testing
+       steps:
+        - step: 
+           name: Running Pipeline SAST
+           image: veracode/pipeline-scan:latest
+           script:
+              - java -jar /opt/veracode/pipeline-scan.jar -vid $VERACODE_API_ID -vkey $VERACODE_API_KEY --file target/*.war
+              #Note: artifact target directory must be defined in prior step to pass application content to this step
+
+    stage: &veracode-sca
+       name: Software Composition Analysis
+       steps:
+         - step:
+            name: Running Software Composition Analysis
+            script:
+              - echo "Run Software Composition Analysis"
+
+pipelines:
+   default:
+    - stage: 
+       name: Build
+       steps: 
+         - step: *build-type
+    
+    - stage: *veracode-sast-pipeline
+                
+    - stage: *veracode-sca
+    - stage:
+         name: Deployment
+         steps:
+          - step:
+              name: Deploy App
+              script:
+                - echo "some step"
+          - step:
+              name: Run deployment tests
+              script:
+                - echo "some other step"
+   custom: # Pipelines that are triggered manually
+    scheduled-pipeline: # The name that is displayed in the list in the Bitbucket Cloud GUI
+      - stage: 
+          name: Build
+          steps: 
+            - step: *build-type
+
+      - stage: *veracode-sast-platform
+ 
+      - stage:
+         name: Unit Testing
+         steps:
+          - step:
+              name: Unit Test A
+              script:
+                - echo "unit test running"
+              
+      - stage:
+         name: Deployment
+         steps:
+          - step:
+              name: Deploy App
+              script:
+                - echo "some step"
+          - step:
+              name: Run deployment tests
+              script:
+                - echo "some other step"
